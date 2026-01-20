@@ -27,6 +27,13 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
+import com.example.proyecto.api.RetrofitClient;
+import com.example.proyecto.models.InformeRequest;
+import java.util.Map;
+
+import com.example.proyecto.models.EstablishmentDTO;
+import java.util.List;
+
 public class CrearInformeActivity extends AppCompatActivity {
 
     private static final int REQUEST_FOTO = 100;
@@ -93,60 +100,52 @@ public class CrearInformeActivity extends AppCompatActivity {
     // TEXTO PREDICTIVO
     // =========================
     private void cargarEstablecimientos() {
+        RetrofitClient.getApiService().getEstablishments().enqueue(new Callback<List<EstablishmentDTO>>() {
+            @Override
+            public void onResponse(Call<List<EstablishmentDTO>> call, Response<List<EstablishmentDTO>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    List<EstablishmentDTO> establecimientosDTO = response.body();
 
-        establecimientos = new ArrayList<>();
+                    // Convertir a modelo Establecimiento local
+                    establecimientos = new ArrayList<>();
+                    for (EstablishmentDTO dto : establecimientosDTO) {
+                        establecimientos.add(new Establecimiento(
+                                dto.getRbd(),
+                                dto.getNombre(),
+                                dto.getDireccion()
+                        ));
+                    }
 
-        establecimientos.add(new Establecimiento(
-                "13591-7",
-                "CENTRO INTEGRAL DE ADULTOS LIMARI",
-                "LIBERTAD Nº 520 OVALLE"
-        ));
+                    // Configurar AutoCompleteTextView
+                    ArrayAdapter<Establecimiento> adapter = new ArrayAdapter<>(
+                            CrearInformeActivity.this,
+                            android.R.layout.simple_dropdown_item_1line,
+                            establecimientos
+                    );
+                    actEstablecimiento.setAdapter(adapter);
 
-        establecimientos.add(new Establecimiento(
-                "13387-6",
-                "COLEGIO DE ARTES ELISEO VIDELA JORQUERA",
-                "AV. LA CHIMBA S/N OVALLE"
-        ));
+                    actEstablecimiento.setOnItemClickListener((parent, view, position, id) -> {
+                        Establecimiento seleccionado = (Establecimiento) parent.getItemAtPosition(position);
+                        etRbd.setText(seleccionado.getRbd());
+                        etDireccion.setText(seleccionado.getDireccion());
 
-        establecimientos.add(new Establecimiento(
-                "706-4",
-                "COLEGIO FRAY JORGE",
-                "VICTORIA #533"
-        ));
+                        informe.setNombreEstablecimiento(seleccionado.getNombre());
+                        informe.setRbd(seleccionado.getRbd());
+                        informe.setDireccion(seleccionado.getDireccion());
+                    });
+                } else {
+                    Toast.makeText(CrearInformeActivity.this,
+                            "Error al cargar establecimientos",
+                            Toast.LENGTH_SHORT).show();
+                }
+            }
 
-        establecimientos.add(new Establecimiento(
-                "40126-9",
-                "COLEGIO RAUL SILVA HENRIQUEZ",
-                "AV. TUQUI #1255 VILLA LAS TORRES OVALLE"
-        ));
-
-        establecimientos.add(new Establecimiento(
-                "11136-8",
-                "COLEGIO SAN ALBERTO HURTADO CRUCHAGA",
-                "CALLE TOCOPILLA S/N OVALLE"
-        ));
-
-        ArrayAdapter<Establecimiento> adapter = new ArrayAdapter<>(
-                this,
-                android.R.layout.simple_dropdown_item_1line,
-                establecimientos
-        );
-
-        actEstablecimiento.setAdapter(adapter);
-
-        actEstablecimiento.setOnItemClickListener((parent, view, position, id) -> {
-
-            Establecimiento seleccionado =
-                    (Establecimiento) parent.getItemAtPosition(position);
-
-            // Autocompletar campos
-            etRbd.setText(seleccionado.getRbd());
-            etDireccion.setText(seleccionado.getDireccion());
-
-            // Guardar en el modelo
-            informe.setNombreEstablecimiento(seleccionado.getNombre());
-            informe.setRbd(seleccionado.getRbd());
-            informe.setDireccion(seleccionado.getDireccion());
+            @Override
+            public void onFailure(Call<List<EstablishmentDTO>> call, Throwable t) {
+                Toast.makeText(CrearInformeActivity.this,
+                        "Error de conexión al cargar establecimientos",
+                        Toast.LENGTH_SHORT).show();
+            }
         });
     }
 
@@ -257,10 +256,56 @@ public class CrearInformeActivity extends AppCompatActivity {
                 FirmaActivity.class
         );
 
+        private void enviarInformeAlBackend() {
+            // Preparar datos
+            InformeRequest request = new InformeRequest();
+            Usuario usuario = SessionManager.getInstance().getUsuario();
+
+            request.setUsuarioId(usuario.getId());
+            request.setRbdEstablecimiento(informe.getRbd());
+            request.setNombreEstablecimiento(informe.getNombreEstablecimiento());
+            request.setDireccion(informe.getDireccion());
+            request.setHoraEntrada(informe.getFechaHoraInicio());
+            request.setHoraSalida(informe.getFechaHoraFin());
+            request.setTipoEquipo(informe.getTipoEquipo());
+            request.setMotivoVisita(informe.getMotivoVisita());
+            request.setDiagnostico(informe.getDiagnostico());
+            request.setObservaciones(informe.getObservaciones());
+            request.setFirmaResponsable(true);
+            request.setFirmaEstablecimiento(false);
+            request.setFirmaRol(usuario.getRol());
+
+            // Enviar al servidor
+            RetrofitClient.getApiService().createReport(request).enqueue(new Callback<Map<String, Object>>() {
+                @Override
+                public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                    if (response.isSuccessful() && response.body() != null) {
+                        Toast.makeText(CrearInformeActivity.this,
+                                "Informe enviado correctamente",
+                                Toast.LENGTH_LONG).show();
+
+                        // Volver al menú principal
+                        startActivity(new Intent(CrearInformeActivity.this, MainActivity.class));
+                        finish();
+                    } else {
+                        Toast.makeText(CrearInformeActivity.this,
+                                "Error al enviar informe",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                }
+
+                @Override
+                public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                    Toast.makeText(CrearInformeActivity.this,
+                            "Error de conexión: " + t.getMessage(),
+                            Toast.LENGTH_LONG).show();
+                }
+            });
+        }
         // (Opcional a futuro: pasar ID del informe)
         // intent.putExtra("ID_INFORME", informe.getIdInforme());
 
-        startActivity(intent);
+        enviarInformeAlBackend();
 
         // 🔒 PRÓXIMO FLUJO
         // - Habilitar exportación
