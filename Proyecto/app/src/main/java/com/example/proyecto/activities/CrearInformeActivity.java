@@ -2,6 +2,7 @@ package com.example.proyecto.activities;
 
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.view.View;
@@ -42,8 +43,14 @@ import androidx.core.content.ContextCompat;
 import android.Manifest;
 import android.content.pm.PackageManager;
 
-public class CrearInformeActivity extends AppCompatActivity {
+import android.net.Uri;
+import android.os.Environment;
+import androidx.core.content.FileProvider;
+import java.io.File;
 
+public class CrearInformeActivity extends AppCompatActivity {
+    private Uri fotoUri;
+    private File fotoFile;
     //private static final int REQUEST_FOTO = 100;
 
     private ActivityResultLauncher<Intent> camaraLauncher;
@@ -66,16 +73,25 @@ public class CrearInformeActivity extends AppCompatActivity {
             camaraLauncher = registerForActivityResult(
                     new ActivityResultContracts.StartActivityForResult(),
                     result -> {
-                        if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        if (result.getResultCode() == RESULT_OK) {
                             try {
-                                Bitmap foto = (Bitmap) result.getData().getExtras().get("data");
-                                if (foto != null) {
-                                    imgEvidencia.setImageBitmap(foto);
-                                    imgEvidencia.setVisibility(View.VISIBLE);
+                                if (fotoFile != null && fotoFile.exists()) {
+                                    Bitmap foto = BitmapFactory.decodeFile(fotoFile.getAbsolutePath());
+                                    if (foto != null) {
+                                        imgEvidencia.setImageBitmap(foto);
+                                        imgEvidencia.setVisibility(View.VISIBLE);
+                                        Toast.makeText(this, "Foto capturada correctamente", Toast.LENGTH_SHORT).show();
+                                    } else {
+                                        Toast.makeText(this, "Error al decodificar la imagen", Toast.LENGTH_SHORT).show();
+                                    }
+                                } else {
+                                    Toast.makeText(this, "Archivo de foto no encontrado", Toast.LENGTH_SHORT).show();
                                 }
                             } catch (Exception e) {
-                                Toast.makeText(this, "Error al capturar foto", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(this, "Error al cargar foto: " + e.getMessage(), Toast.LENGTH_LONG).show();
                             }
+                        } else if (result.getResultCode() == RESULT_CANCELED) {
+                            Toast.makeText(this, "Captura cancelada", Toast.LENGTH_SHORT).show();
                         }
                     }
             );
@@ -195,21 +211,40 @@ public class CrearInformeActivity extends AppCompatActivity {
     // EVIDENCIA FOTOGRÁFICA
     // =========================
     private void abrirCamara() {
-        // Verificar permiso de cámara
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
                 == PackageManager.PERMISSION_GRANTED) {
-            // Permiso concedido, abrir cámara
-            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-            if (intent.resolveActivity(getPackageManager()) != null) {
-                camaraLauncher.launch(intent);
-            } else {
-                Toast.makeText(this, "No se encontró aplicación de cámara", Toast.LENGTH_SHORT).show();
+
+            try {
+                // Crear archivo temporal para la foto
+                String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+                String nombreArchivo = "FOTO_" + timeStamp + ".jpg";
+                File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+                fotoFile = new File(storageDir, nombreArchivo);
+
+                // Crear URI con FileProvider
+                fotoUri = FileProvider.getUriForFile(
+                        this,
+                        "com.example.proyecto.fileprovider",
+                        fotoFile
+                );
+
+                // Crear intent de cámara con URI de salida
+                Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                intent.putExtra(MediaStore.EXTRA_OUTPUT, fotoUri);
+
+                if (intent.resolveActivity(getPackageManager()) != null) {
+                    camaraLauncher.launch(intent);
+                } else {
+                    Toast.makeText(this, "No se encontró aplicación de cámara", Toast.LENGTH_SHORT).show();
+                }
+            } catch (Exception e) {
+                Toast.makeText(this, "Error al preparar cámara: " + e.getMessage(), Toast.LENGTH_LONG).show();
             }
         } else {
-            // Solicitar permiso
             permisoCamaraLauncher.launch(Manifest.permission.CAMERA);
         }
     }
+
 
 
     // =========================
