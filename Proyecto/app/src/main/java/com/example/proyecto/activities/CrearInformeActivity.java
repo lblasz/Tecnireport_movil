@@ -26,13 +26,15 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
-
-import com.example.proyecto.api.RetrofitClient;
-import com.example.proyecto.models.InformeRequest;
 import java.util.Map;
 
+import com.example.proyecto.api.RetrofitClient;
 import com.example.proyecto.models.EstablishmentDTO;
-import java.util.List;
+import com.example.proyecto.models.InformeRequest;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class CrearInformeActivity extends AppCompatActivity {
 
@@ -256,52 +258,6 @@ public class CrearInformeActivity extends AppCompatActivity {
                 FirmaActivity.class
         );
 
-        private void enviarInformeAlBackend() {
-            // Preparar datos
-            InformeRequest request = new InformeRequest();
-            Usuario usuario = SessionManager.getInstance().getUsuario();
-
-            request.setUsuarioId(usuario.getId());
-            request.setRbdEstablecimiento(informe.getRbd());
-            request.setNombreEstablecimiento(informe.getNombreEstablecimiento());
-            request.setDireccion(informe.getDireccion());
-            request.setHoraEntrada(informe.getFechaHoraInicio());
-            request.setHoraSalida(informe.getFechaHoraFin());
-            request.setTipoEquipo(informe.getTipoEquipo());
-            request.setMotivoVisita(informe.getMotivoVisita());
-            request.setDiagnostico(informe.getDiagnostico());
-            request.setObservaciones(informe.getObservaciones());
-            request.setFirmaResponsable(true);
-            request.setFirmaEstablecimiento(false);
-            request.setFirmaRol(usuario.getRol());
-
-            // Enviar al servidor
-            RetrofitClient.getApiService().createReport(request).enqueue(new Callback<Map<String, Object>>() {
-                @Override
-                public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
-                    if (response.isSuccessful() && response.body() != null) {
-                        Toast.makeText(CrearInformeActivity.this,
-                                "Informe enviado correctamente",
-                                Toast.LENGTH_LONG).show();
-
-                        // Volver al menú principal
-                        startActivity(new Intent(CrearInformeActivity.this, MainActivity.class));
-                        finish();
-                    } else {
-                        Toast.makeText(CrearInformeActivity.this,
-                                "Error al enviar informe",
-                                Toast.LENGTH_SHORT).show();
-                    }
-                }
-
-                @Override
-                public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-                    Toast.makeText(CrearInformeActivity.this,
-                            "Error de conexión: " + t.getMessage(),
-                            Toast.LENGTH_LONG).show();
-                }
-            });
-        }
         // (Opcional a futuro: pasar ID del informe)
         // intent.putExtra("ID_INFORME", informe.getIdInforme());
 
@@ -310,5 +266,52 @@ public class CrearInformeActivity extends AppCompatActivity {
         // 🔒 PRÓXIMO FLUJO
         // - Habilitar exportación
         // - Enviar a API
+    }
+
+    private void enviarInformeAlBackend() {
+        // Preparar datos
+        InformeRequest request = new InformeRequest();
+        Usuario usuario = SessionManager.getInstance().getUsuario();
+
+        request.setUsuarioId(usuario.getId());
+        request.setRbdEstablecimiento(informe.getRbd());
+        request.setNombreEstablecimiento(informe.getNombreEstablecimiento());
+        request.setDireccion(informe.getDireccion());
+        request.setHoraEntrada(informe.getFechaHoraInicio());
+        request.setHoraSalida(informe.getFechaHoraFin());
+        request.setTipoEquipo(informe.getTipoEquipo());
+        request.setMotivoVisita(informe.getMotivoVisita());
+        request.setDiagnostico(informe.getDiagnostico());
+        request.setObservaciones(informe.getObservaciones());
+        request.setFirmaResponsable(true);
+        request.setFirmaEstablecimiento(false);
+        request.setFirmaRol(usuario.getRol());
+
+        // Enviar al servidor
+        RetrofitClient.getApiService().createReport(request).enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    Toast.makeText(CrearInformeActivity.this,
+                            "Informe enviado correctamente",
+                            Toast.LENGTH_LONG).show();
+
+                    // Volver al menú principal
+                    startActivity(new Intent(CrearInformeActivity.this, MainActivity.class));
+                    finish();
+                } else {
+                    Toast.makeText(CrearInformeActivity.this,
+                            "Error al enviar informe",
+                            Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                Toast.makeText(CrearInformeActivity.this,
+                        "Error de conexión: " + t.getMessage(),
+                        Toast.LENGTH_LONG).show();
+            }
+        });
     }
 }
