@@ -36,9 +36,18 @@ import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.core.content.ContextCompat;
+import android.Manifest;
+import android.content.pm.PackageManager;
+
 public class CrearInformeActivity extends AppCompatActivity {
 
-    private static final int REQUEST_FOTO = 100;
+    //private static final int REQUEST_FOTO = 100;
+
+    private ActivityResultLauncher<Intent> camaraLauncher;
+    private ActivityResultLauncher<String> permisoCamaraLauncher;
 
     private Informe informe;
 
@@ -49,9 +58,40 @@ public class CrearInformeActivity extends AppCompatActivity {
     private ImageView imgEvidencia;
     private List<Establecimiento> establecimientos;
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+        @Override
+        protected void onCreate(Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+
+            // Registrar el lanzador de la cámara
+            camaraLauncher = registerForActivityResult(
+                    new ActivityResultContracts.StartActivityForResult(),
+                    result -> {
+                        if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                            try {
+                                Bitmap foto = (Bitmap) result.getData().getExtras().get("data");
+                                if (foto != null) {
+                                    imgEvidencia.setImageBitmap(foto);
+                                    imgEvidencia.setVisibility(View.VISIBLE);
+                                }
+                            } catch (Exception e) {
+                                Toast.makeText(this, "Error al capturar foto", Toast.LENGTH_SHORT).show();
+                            }
+                        }
+                    }
+            );
+
+            // Registrar el lanzador de permisos
+            permisoCamaraLauncher = registerForActivityResult(
+                    new ActivityResultContracts.RequestPermission(),
+                    isGranted -> {
+                        if (isGranted) {
+                            abrirCamara();
+                        } else {
+                            Toast.makeText(this, "Permiso de cámara denegado", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+            );
+
         setContentView(R.layout.activity_crear_informe);
 
         // ===== Bind UI =====
@@ -155,20 +195,22 @@ public class CrearInformeActivity extends AppCompatActivity {
     // EVIDENCIA FOTOGRÁFICA
     // =========================
     private void abrirCamara() {
-        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        startActivityForResult(intent, REQUEST_FOTO);
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (requestCode == REQUEST_FOTO && resultCode == RESULT_OK && data != null) {
-            Bitmap foto = (Bitmap) data.getExtras().get("data");
-            imgEvidencia.setImageBitmap(foto);
-            imgEvidencia.setVisibility(View.VISIBLE);
+        // Verificar permiso de cámara
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                == PackageManager.PERMISSION_GRANTED) {
+            // Permiso concedido, abrir cámara
+            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            if (intent.resolveActivity(getPackageManager()) != null) {
+                camaraLauncher.launch(intent);
+            } else {
+                Toast.makeText(this, "No se encontró aplicación de cámara", Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            // Solicitar permiso
+            permisoCamaraLauncher.launch(Manifest.permission.CAMERA);
         }
     }
+
 
     // =========================
     // BLOQUEAR FORMULARIO
