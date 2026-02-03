@@ -48,6 +48,10 @@ import android.os.Environment;
 import androidx.core.content.FileProvider;
 import java.io.File;
 
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.RequestBody;
+
 public class CrearInformeActivity extends AppCompatActivity {
     private Uri fotoUri;
     private File fotoFile;
@@ -346,49 +350,74 @@ public class CrearInformeActivity extends AppCompatActivity {
     }
 
     private void enviarInformeAlBackend() {
-        // Preparar datos
-        InformeRequest request = new InformeRequest();
         Usuario usuario = SessionManager.getInstance().getUsuario();
 
-        request.setUsuarioId(usuario.getId());
-        request.setRbdEstablecimiento(informe.getRbd());
-        request.setNombreEstablecimiento(informe.getNombreEstablecimiento());
-        request.setDireccion(informe.getDireccion());
-        request.setHoraEntrada(informe.getFechaHoraInicio());
-        request.setHoraSalida(informe.getFechaHoraFin());
-        request.setTipoEquipo(informe.getTipoEquipo());
-        request.setMotivoVisita(informe.getMotivoVisita());
-        request.setDiagnostico(informe.getDiagnostico());
-        request.setObservaciones(informe.getObservaciones());
-        request.setFirmaResponsable(true);
-        request.setFirmaEstablecimiento(false);
-        request.setFirmaRol(usuario.getRol());
+        try {
+            // Convertir datos a RequestBody
+            RequestBody usuarioId = RequestBody.create(MediaType.parse("text/plain"), String.valueOf(usuario.getId()));
+            RequestBody rbd = RequestBody.create(MediaType.parse("text/plain"), informe.getRbd());
+            RequestBody nombre = RequestBody.create(MediaType.parse("text/plain"), informe.getNombreEstablecimiento());
+            RequestBody direccion = RequestBody.create(MediaType.parse("text/plain"), informe.getDireccion() != null ? informe.getDireccion() : "");
+            RequestBody horaEntrada = RequestBody.create(MediaType.parse("text/plain"), informe.getFechaHoraInicio());
+            RequestBody horaSalida = RequestBody.create(MediaType.parse("text/plain"), informe.getFechaHoraFin());
+            RequestBody tipoEquipo = RequestBody.create(MediaType.parse("text/plain"), informe.getTipoEquipo());
+            RequestBody motivoVisita = RequestBody.create(MediaType.parse("text/plain"), informe.getMotivoVisita());
+            RequestBody diagnostico = RequestBody.create(MediaType.parse("text/plain"), informe.getDiagnostico() != null ? informe.getDiagnostico() : "");
+            RequestBody observaciones = RequestBody.create(MediaType.parse("text/plain"), informe.getObservaciones() != null ? informe.getObservaciones() : "");
+            RequestBody firmaResponsable = RequestBody.create(MediaType.parse("text/plain"), "true");
+            RequestBody firmaEstablecimiento = RequestBody.create(MediaType.parse("text/plain"), "false");
+            RequestBody firmaRol = RequestBody.create(MediaType.parse("text/plain"), usuario.getRol());
 
-        // Enviar al servidor
-        RetrofitClient.getApiService().createReport(request).enqueue(new Callback<Map<String, Object>>() {
-            @Override
-            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    Toast.makeText(CrearInformeActivity.this,
-                            "Informe enviado correctamente",
-                            Toast.LENGTH_LONG).show();
+            // Preparar la foto
+            MultipartBody.Part fotoPart = null;
+            if (fotoFile != null && fotoFile.exists()) {
+                RequestBody fotoBody = RequestBody.create(MediaType.parse("image/jpeg"), fotoFile);
+                fotoPart = MultipartBody.Part.createFormData("fotos", fotoFile.getName(), fotoBody);
+            } else {
+                Toast.makeText(this, "No se encontró la foto para enviar", Toast.LENGTH_SHORT).show();
+                return;
+            }
 
-                    // Volver al menú principal
-                    startActivity(new Intent(CrearInformeActivity.this, MainActivity.class));
-                    finish();
-                } else {
-                    Toast.makeText(CrearInformeActivity.this,
-                            "Error al enviar informe",
-                            Toast.LENGTH_SHORT).show();
+            // Enviar al servidor
+            RetrofitClient.getApiService().createReportWithPhoto(
+                    usuarioId, rbd, nombre, direccion,
+                    horaEntrada, horaSalida, tipoEquipo,
+                    motivoVisita, diagnostico, observaciones,
+                    firmaResponsable, firmaEstablecimiento, firmaRol,
+                    fotoPart
+            ).enqueue(new Callback<Map<String, Object>>() {
+                @Override
+                public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                    if (response.isSuccessful() && response.body() != null) {
+                        Map<String, Object> resultado = response.body();
+                        int fotosGuardadas = resultado.get("fotosGuardadas") != null
+                                ? ((Double) resultado.get("fotosGuardadas")).intValue()
+                                : 0;
+
+                        Toast.makeText(CrearInformeActivity.this,
+                                "✅ Informe enviado con " + fotosGuardadas + " foto(s)",
+                                Toast.LENGTH_LONG).show();
+
+                        // Volver al menú principal
+                        startActivity(new Intent(CrearInformeActivity.this, MainActivity.class));
+                        finish();
+                    } else {
+                        Toast.makeText(CrearInformeActivity.this,
+                                "❌ Error al enviar informe: " + response.code(),
+                                Toast.LENGTH_SHORT).show();
+                    }
                 }
-            }
 
-            @Override
-            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-                Toast.makeText(CrearInformeActivity.this,
-                        "Error de conexión: " + t.getMessage(),
-                        Toast.LENGTH_LONG).show();
-            }
-        });
+                @Override
+                public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                    Toast.makeText(CrearInformeActivity.this,
+                            "❌ Error de conexión: " + t.getMessage(),
+                            Toast.LENGTH_LONG).show();
+                }
+            });
+        } catch (Exception e) {
+            Toast.makeText(this, "Error al preparar datos: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
-}
+    }
+
